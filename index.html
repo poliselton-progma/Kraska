@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Краска — долг">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#111111">
+<meta name="description" content="Учёт долга по краске">
+<title>Краска — долг</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+<style>
+:root {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #111;
+  background: #f2f2f7;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; margin: 0; }
+body {
+  padding-top: var(--safe-top);
+  padding-bottom: var(--safe-bottom);
+  overscroll-behavior: none;
+}
+.wrap {
+  max-width: 520px;
+  margin: auto;
+  padding: 20px 16px 40px;
+  min-height: 100%;
+}
+h1 { font-size: 28px; margin: 8px 0 18px; }
+.card {
+  background: #fff;
+  border-radius: 20px;
+  padding: 20px;
+  margin-bottom: 14px;
+  box-shadow: 0 2px 12px #0000000b;
+}
+.label { font-size: 14px; color: #777; margin-bottom: 6px; }
+.debt { font-size: 42px; font-weight: 800; letter-spacing: -1px; }
+input {
+  width: 100%;
+  border: 1px solid #ddd;
+  border-radius: 14px;
+  padding: 15px;
+  font-size: 18px;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  background: #fff;
+}
+input:focus { border-color: #777; }
+.row { display: flex; gap: 10px; }
+.row > * { flex: 1; }
+button {
+  border: 0;
+  border-radius: 14px;
+  padding: 15px;
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  user-select: none;
+}
+.add { background: #111; color: white; }
+.pay { background: #e7e7eb; color: #111; }
+.small { font-size: 13px; color: #777; margin-top: 9px; }
+.history { margin-top: 6px; }
+.item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 0;
+  border-bottom: 1px solid #eee;
+}
+.item:last-child { border-bottom: 0; }
+.desc { font-weight: 600; }
+.date { font-size: 12px; color: #888; margin-top: 3px; }
+.plus { color: #c62828; font-weight: 700; }
+.minus { color: #188038; font-weight: 700; }
+.actions { display: flex; gap: 8px; margin-top: 14px; }
+.secondary { background: #eee; color: #222; flex: 1; }
+.danger { background: #fff0f0; color: #b00020; flex: 1; }
+.empty { text-align: center; color: #888; padding: 20px; }
+.install-hint {
+  background: #e8f5e9;
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #1b5e20;
+  display: none;
+}
+.install-hint strong { display: block; margin-bottom: 4px; }
+.install-hint.hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🎨 Краска — долг</h1>
+
+  <div class="install-hint" id="installHint">
+    <strong>Как добавить на домашний экран</strong>
+    Нажми кнопку «Поделиться» <span style="font-size:18px">⎘</span> внизу Safari → «На экран „Домой“».
+  </div>
+
+  <div class="card">
+    <div class="label">Текущий долг</div>
+    <div class="debt" id="debt">300 000 ₽</div>
+  </div>
+
+  <div class="card">
+    <div class="label">Что произошло?</div>
+    <input id="desc" placeholder="Например: краска, грунт, оплата" autocomplete="off" autocorrect="off">
+    <div style="height:10px"></div>
+    <input id="amount" inputmode="decimal" type="number" min="0" step="1" placeholder="Сумма, ₽" autocomplete="off">
+    <div style="height:10px"></div>
+    <div class="row">
+      <button class="add" onclick="addOperation(1)">＋ В долг</button>
+      <button class="pay" onclick="addOperation(-1)">− Оплатил</button>
+    </div>
+    <div class="small">Можно вводить только сумму — описание необязательно.</div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <strong>История</strong>
+      <span class="label" id="count"></span>
+    </div>
+    <div class="history" id="history"></div>
+    <div class="actions">
+      <button class="secondary" onclick="exportData()">Экспорт</button>
+      <button class="danger" onclick="resetData()">Сбросить</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const KEY = "powder_paint_debt_v1";
+let data = JSON.parse(localStorage.getItem(KEY) || "null");
+if (!data) data = { debt: 300000, items: [] };
+
+function save() {
+  localStorage.setItem(KEY, JSON.stringify(data));
+  render();
+}
+
+function money(n) {
+  return new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(n) + " ₽";
+}
+
+function render() {
+  document.getElementById("debt").textContent = money(data.debt);
+  document.getElementById("count").textContent = data.items.length + " операций";
+  const h = document.getElementById("history");
+  if (!data.items.length) {
+    h.innerHTML = '<div class="empty">Пока нет операций</div>';
+    return;
+  }
+  h.innerHTML = data.items.slice().reverse().map(x => `
+    <div class="item">
+      <div>
+        <div class="desc">${escapeHtml(x.desc || "Без описания")}</div>
+        <div class="date">${x.date}</div>
+      </div>
+      <div class="${x.type === 1 ? "plus" : "minus"}">${x.type === 1 ? "+" : "−"}${money(x.amount)}</div>
+    </div>`).join("");
+}
+
+function addOperation(type) {
+  const amount = Number(document.getElementById("amount").value);
+  if (!amount || amount <= 0) {
+    alert("Введи сумму.");
+    return;
+  }
+  const desc = document.getElementById("desc").value.trim();
+  data.debt += type * amount;
+  data.items.push({
+    type,
+    amount,
+    desc,
+    date: new Date().toLocaleString("ru-RU", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    })
+  });
+  document.getElementById("amount").value = "";
+  document.getElementById("desc").value = "";
+  save();
+}
+
+function resetData() {
+  if (confirm("Удалить всю историю и вернуть начальный долг 300 000 ₽?")) {
+    data = { debt: 300000, items: [] };
+    save();
+  }
+}
+
+function exportData() {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "kraska-dolg.json";
+  a.click();
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, m => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;"
+  }[m]));
+}
+
+// Показываем подсказку только в Safari и только если ещё не установлено
+function checkInstallHint() {
+  const isStandalone = window.navigator.standalone === true ||
+    window.matchMedia("(display-mode: standalone)").matches;
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const hint = document.getElementById("installHint");
+  if (isIOS && !isStandalone) {
+    hint.style.display = "block";
+  } else {
+    hint.classList.add("hidden");
+  }
+}
+
+// Регистрация Service Worker для офлайн-работы
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("./sw.js").catch(() => {});
+}
+
+render();
+checkInstallHint();
+</script>
+</body>
+</html>
